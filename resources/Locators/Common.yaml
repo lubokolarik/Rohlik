@@ -1,0 +1,19 @@
+###################################
+# login                           #
+###################################
+login:
+  sign_button:  xpath=//*[@data-test="header-user-icon"]
+  username: xpath=//input[@id='email']
+  password: xpath=//input[@id='password']
+  sign_in: xpath=//button[@data-test='btnSignIn']
+
+###################################
+# main menu common to all pages   #
+###################################
+main_menu:
+  notification_bell:  xpath=//div[@data-test='notification-bell']
+  search:  xpath=//input[@id='searchGlobal']
+  product_add_basket:  xpath=(//button[@data-test='btnAdd'])[1]
+  basket:  xpath=//div[@data-test='cart-header-wrapper']
+  check_order:  xpath=//a[contains(text(), 'Banán 1 ks')]
+  remove_product:  xpath=//*[@data-test='IconMinus']

@@ -1,0 +1,7 @@
+config:
+  environment: "local"
+  url_test: "https://www.rohlik.cz/rohlicek"
+  username: test@email.com
+  password:  pass
+
+

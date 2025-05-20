@@ -1,0 +1,105 @@
+name: Automated tests
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 2 * * *' # priklad schedule
+  workflow_dispatch:
+
+jobs:
+  run-tests:
+    runs-on:
+      group:
+      labels:
+    steps:
+      # stop docker and remove images if exists
+      - name: Remove all Docker images for automaty
+        run: |
+          CONTAINER_ID=$(docker ps -a -q --filter "ancestor=automaty-container")
+          if [ -n "$CONTAINER_ID" ]; then
+            docker stop $CONTAINER_ID && docker rm $CONTAINER_ID
+          else
+            echo "No container to stop and remove"
+          fi
+
+          IMAGE_ID=$(docker images --filter=reference='automaty-container:*' -q)
+          if [ -n "$IMAGE_ID" ]; then
+            docker rmi $IMAGE_ID
+          else
+            echo "No image to remove"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Build image
+      - name: Build docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile-RF
+          platforms: linux/amd64
+          tags: automaty:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+          push: false
+
+      # Start docker
+      - name: Start Docker container
+        run: |
+          docker run -d --memory="2g" --memory-swap="3g" --cpus="1.0" \
+            --name automaty-container --rm -it \
+            -e INFLUXDB_URL="${{ vars.INFLUXDB_HOST }}" \
+            -e INFLUXDB_ORG="5750695a305ddefc" \
+            -e INFLUXDB_TOKEN="${{ secrets.INFLUXDB_TOKEN }}" \
+            -e INFLUXDB_BUCKET="grafana" \
+            automaty:${{ github.sha }} /bin/bash
+
+      - name: Check container status
+        run: docker inspect -f '{{.State.Status}}' automaty-container
+
+      # Run tests
+      - name: Run tests in Docker container
+        run: docker exec automaty-container robot --outputdir /usr/src/app/results tests/
+        continue-on-error: true
+
+      - name: Upload results to InfluxDB
+        run: |      
+          echo "️Spouštím zápis do InfluxDB..."
+          docker exec automaty-container python /usr/src/app/resources/libraries/upload_results.py || {
+            echo "Chyba při zápisu do InfluxDB!";
+            docker logs automaty-container;
+            exit 1;
+          }
+          echo "Zápis do InfluxDB dokončen úspěšně."
+
+      - name: View container logs
+        run: |
+          docker logs automaty-container
+
+      # Containre logs
+      - name: View container logs (if failure occurs)
+        if: failure()
+        run: docker logs automaty-container
+
+      # Stop container and remove image
+      - name: Stop and remove Docker containers
+        if: always()
+        run: |
+          docker ps -a -q --filter "name=automaty-container" | grep -q . && docker stop automaty-container && docker rm automaty-container || echo "No container to remove"
+
+      - name: Remove all Docker images for automaty final
+        if: always()
+        run: |
+          docker images --filter=reference='automaty:*' -q | xargs -r docker rmi
