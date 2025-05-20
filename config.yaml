@@ -1,7 +1,5 @@
 config:
   environment: "local"
-  url_test: "https://www.rohlik.cz/rohlicek"
-  username: test@email.com
-  password:  pass
-
-
+  url_test: ${{ vars.URL_TEST }}
+  username: ${{ secrets.USERNAME }}
+  password: ${{ secrets.PASSWORD }}
